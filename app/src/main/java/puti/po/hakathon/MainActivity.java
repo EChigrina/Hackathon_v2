@@ -1,17 +1,29 @@
 package puti.po.hakathon;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.LocalBroadcastManager;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.Editable;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -55,7 +67,14 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
 
     EditText etFindPlace;
     GeoPosition currentPosition = null;
+    MapMarker currentLocationMarker = null;
     Context context;
+    WiFiClient WiFiClient;
+    SharedPreferences sPref;
+    BroadcastReceiver newDriverBroadcastReceiver;
+    BroadcastReceiver newPassengerBroadcastReceiver;
+    BroadcastReceiver connectedBroadcastReceiver;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -81,6 +100,13 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
                       return false;
                   }
               });
+        sPref = getPreferences(MODE_PRIVATE);
+        if(sPref.contains("IP")) {
+            String ip = sPref.getString("IP", "");
+            WiFiClient = new WiFiClient(this, ip);
+            Toast.makeText(this, ip, Toast.LENGTH_SHORT).show();
+        }
+        connectToWiFiNetwork();
         mapFragment.init(new OnEngineInitListener() {
             @Override
             public void onEngineInitializationCompleted(OnEngineInitListener.Error error) {
@@ -110,6 +136,139 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
                 }
             }
         });
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.miEnterIP:
+                AlertDialog.Builder alert = new AlertDialog.Builder(this);
+
+                alert.setTitle("Введите IP-адрес сервера");
+                final EditText input = new EditText(this);
+                alert.setView(input);
+
+                alert.setPositiveButton("Принять", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int whichButton) {
+                        String value = input.getText().toString();
+                        if(WiFiClient == null || WiFiClient.connected == false) {
+                            WiFiClient = new WiFiClient(context, value);
+                            WiFiClient.run();
+                            sPref = getPreferences(MODE_PRIVATE);
+                            SharedPreferences.Editor ed = sPref.edit();
+                            ed.putString("IP", value);
+                            ed.apply();
+                        }
+                    }
+                });
+
+                alert.setNegativeButton("Отменить", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int whichButton) {
+                        // Canceled.
+                    }
+                });
+
+                alert.show();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+
+    private boolean haveNetworkConnection() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo netInfo = cm.getActiveNetworkInfo();
+        return netInfo != null && netInfo.isConnectedOrConnecting();
+    }
+
+    private void connectToWiFiNetwork() {
+        if(!haveNetworkConnection()) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setMessage("Отсутствует подключение к сети")
+                    .setCancelable(false)
+                    .setPositiveButton("Включить Wi-Fi", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+                        }
+                    })
+                    .setNegativeButton("Выход", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            finishAndRemoveTask();
+                        }
+                    });
+            AlertDialog dialog = builder.create();
+            dialog.show();
+        }
+        else {
+            registerBroadcastReceivers();
+            if(WiFiClient != null) {
+                WiFiClient.run();
+            }
+        }
+    }
+
+    private void registerBroadcastReceivers() {
+        newPassengerBroadcastReceiver = createNewPassengerBroadcastReceiver();
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+                newPassengerBroadcastReceiver,
+                new IntentFilter("newPassenger"));
+
+        newDriverBroadcastReceiver = createNewDriverBroadcastReceiver();
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+                newDriverBroadcastReceiver,
+                new IntentFilter("newDriver"));
+
+        connectedBroadcastReceiver = connectedBroadcastReceiver();
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+                connectedBroadcastReceiver,
+                new IntentFilter("Connected"));
+    }
+
+    private BroadcastReceiver createNewPassengerBroadcastReceiver() {
+        return new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if(intent.hasExtra("passengerLocation")) {
+                    String passengerLocation = intent.getStringExtra("passengerLocation");
+                }
+                if(intent.hasExtra("passengerDestination")) {
+                    String passengerDestination = intent.getStringExtra("passengerDestination");
+                }
+            }
+        };
+    }
+
+    private BroadcastReceiver createNewDriverBroadcastReceiver() {
+        return new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if(intent.hasExtra("driverLocation")) {
+                    String driverLocation = intent.getStringExtra("driverLocation");
+                }
+                if(intent.hasExtra("driverDestination")) {
+                    String driverDestination = intent.getStringExtra("driverDestination");
+                }
+            }
+        };
+    }
+
+    private BroadcastReceiver connectedBroadcastReceiver() {
+        return new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if(WiFiClient != null && WiFiClient.connected)
+                {
+
+                }
+            }
+        };
     }
 
     private void geoCodeRequest(String query) {
@@ -197,14 +356,14 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
                 break;
         }
     }
-
+    int first = 1;
     @Override
     public void onPositionUpdated(PositioningManager.LocationMethod locationMethod, GeoPosition geoPosition, boolean b) {
         if(currentPosition == null) {
             currentPosition = geoPosition;
         }
         else {
-            GeoCoordinate newCoordinate = geoPosition.getCoordinate();
+         /*   GeoCoordinate newCoordinate = geoPosition.getCoordinate();
             GeoCoordinate currentCoordinate = currentPosition.getCoordinate();
             double _lathitude = newCoordinate.getLatitude();
             double _longitude = newCoordinate.getLongitude();
@@ -230,25 +389,28 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
             }
             else {
                 currentPosition = geoPosition;
-            }
+            }*/
         }
         GeoCoordinate geoCoordinate = geoPosition.getCoordinate();
-        Toast.makeText(context, String.valueOf(geoCoordinate.getLatitude()) +
-                        String.valueOf(geoCoordinate.getLongitude()),
-                Toast.LENGTH_SHORT).show();
-        map.setCenter(geoCoordinate,
-                Map.Animation.NONE);
+        if(first == 1) {
+            map.setCenter(geoCoordinate,
+                    Map.Animation.NONE);
+            first++;
+        }
+
         Image marker_img = new Image();
         try {
-            marker_img.setImageResource(R.drawable.marker);
+            marker_img.setImageResource(R.drawable.circle);
         } catch (IOException e) {
             e.printStackTrace();
         }
+        if(currentLocationMarker != null) {
+            map.removeMapObject(currentLocationMarker);
+        }
         // create a MapMarker centered at current location with png image.
-        MapMarker m_map_marker = new MapMarker(currentPosition.getCoordinate(), marker_img);
+        currentLocationMarker = new MapMarker(currentPosition.getCoordinate(), marker_img);
         // add a MapMarker to current active map.
-        map.addMapObject(m_map_marker);
-        map.removeMapObject(m_map_marker);
+        map.addMapObject(currentLocationMarker);
     }
 
     @Override

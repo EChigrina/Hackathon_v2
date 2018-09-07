@@ -36,8 +36,13 @@ import com.here.android.mpa.common.PositioningManager;
 import com.here.android.mpa.mapping.Map;
 import com.here.android.mpa.mapping.MapFragment;
 import com.here.android.mpa.mapping.MapMarker;
+import com.here.android.mpa.mapping.MapRoute;
 import com.here.android.mpa.mapping.MapState;
 import com.here.android.mpa.mapping.PositionIndicator;
+import com.here.android.mpa.routing.RouteManager;
+import com.here.android.mpa.routing.RouteOptions;
+import com.here.android.mpa.routing.RoutePlan;
+import com.here.android.mpa.routing.RouteResult;
 import com.here.android.mpa.search.ErrorCode;
 import com.here.android.mpa.search.GeocodeRequest;
 import com.here.android.mpa.search.GeocodeRequest2;
@@ -286,21 +291,68 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
                      * display to the screen. Please refer to HERE Android SDK doc for other
                      * supported APIs.
                      */
-                    StringBuilder sb = new StringBuilder();
+                    //TODO: обработать все пришедшие результаты
+                    /*StringBuilder sb = new StringBuilder();
                     for (GeocodeResult result : results) {
                         sb.append(result.getLocation().getCoordinate().toString());
                         sb.append("\n");
-                    }
-                    etFindPlace.setText(sb.toString());
+                    }*/
+                    GeocodeResult result = results.get(0);
+                    createRoute(result.getLocation().getCoordinate());
                     // Toast.makeText(context, sb.toString(), Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(context, "ERROR:Geocode Request returned error code:" + errorCode, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(context, "Ошибка распознавания адреса:" + errorCode, Toast.LENGTH_SHORT).show();
                 }
             }
         });
     }
 
-  /*  @Override
+    private void createRoute(GeoCoordinate destination) {
+        if(currentPosition == null) {
+            Toast.makeText(context, "Текущее местоположение не определено", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if(destination == null) {
+            return;
+        }
+        RouteManager rm = new RouteManager();
+
+        RoutePlan routePlan = new RoutePlan();
+        routePlan.addWaypoint(currentPosition.getCoordinate());
+        routePlan.addWaypoint(destination);
+
+        RouteOptions routeOptions = new RouteOptions();
+        routeOptions.setTransportMode(RouteOptions.TransportMode.CAR);
+        routeOptions.setRouteType(RouteOptions.Type.FASTEST);
+
+        routePlan.setRouteOptions(routeOptions);
+
+        rm.calculateRoute(routePlan, new RouteListener());
+    }
+
+    private class RouteListener implements RouteManager.Listener {
+
+        // Method defined in Listener
+        public void onProgress(int percentage) {
+            // Display a message indicating calculation progress
+        }
+
+        @Override
+        // Method defined in Listener
+        public void onCalculateRouteFinished(RouteManager.Error error, List<RouteResult> routeResult) {
+            // If the route was calculated successfully
+            if (error == RouteManager.Error.NONE) {
+                // Render the route on the map
+                MapRoute mapRoute = new MapRoute(routeResult.get(0).getRoute());
+                map.addMapObject(mapRoute);
+            }
+            else {
+                // Display a message indicating route calculation failure
+            }
+        }
+    }
+
+    @Override
     protected void onPause() {
         super.onPause();
         if (mPositioningManager != null) {
@@ -312,9 +364,9 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
     protected void onResume() {
         super.onResume();
         if (mPositioningManager != null) {
-            mPositioningManager.start(PositioningManager.LocationMethod.GPS_NETWORK_INDOOR);
+            mPositioningManager.start(PositioningManager.LocationMethod.GPS_NETWORK);
         }
-    }*/
+    }
 
     protected void checkPermissions() {
         final List<String> missingPermissions = new ArrayList<String>();

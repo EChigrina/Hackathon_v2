@@ -31,6 +31,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import com.google.gson.Gson;
 import com.here.android.mpa.common.GeoCoordinate;
 import com.here.android.mpa.common.GeoPosition;
 import com.here.android.mpa.common.Image;
@@ -120,6 +121,12 @@ public class MainActivity extends AppCompatActivity implements MapGesture.OnGest
             @Override
             public void onClick(View view) {
                 findCar();
+                //WiFiClient.getDriver(String.valueOf(3000));
+                Gson g = new Gson();
+                String json = g.toJson(mapRoute);
+                clearRoute();
+                MapRoute m = g.fromJson(json, MapRoute.class);
+                map.addMapObject(m);
             }
         });
         sPref = getPreferences(MODE_PRIVATE);
@@ -237,6 +244,17 @@ public class MainActivity extends AppCompatActivity implements MapGesture.OnGest
         }
     }
 
+    public void onClickOK(View view){
+        Toast toast = Toast.makeText(this, "",Toast.LENGTH_LONG);
+        toast.show();
+    }
+
+    //Обработка кнопки "cancell"
+    public void onClickCancell(View view){
+        Toast toast = Toast.makeText(this, "",Toast.LENGTH_LONG);
+        toast.show();
+    }
+
     private void registerBroadcastReceivers() {
         newPassengerBroadcastReceiver = createNewPassengerBroadcastReceiver();
         LocalBroadcastManager.getInstance(this).registerReceiver(
@@ -297,8 +315,9 @@ public class MainActivity extends AppCompatActivity implements MapGesture.OnGest
         return new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
+                String driverID = "";
                 if(intent.hasExtra("driverID")) {
-                    String driverID = intent.getStringExtra("driverID");
+                    driverID = intent.getStringExtra("driverID");
                 }
                 if(intent.hasExtra("driverPhoto")) {
                     String driverPhoto = intent.getStringExtra("driverPhoto");
@@ -306,6 +325,7 @@ public class MainActivity extends AppCompatActivity implements MapGesture.OnGest
                 if(intent.hasExtra("driverAuto")) {
                     String driverAuto = intent.getStringExtra("driverAuto");
                 }
+                Toast.makeText(MainActivity.this, driverID, Toast.LENGTH_SHORT).show();
             }
         };
     }
@@ -568,6 +588,8 @@ public class MainActivity extends AppCompatActivity implements MapGesture.OnGest
 
                     MapMarker window_marker = ((MapMarker) mapObject);
                     Toast.makeText(context, window_marker.getTitle(), Toast.LENGTH_SHORT).show();
+                   // CustomDialogClass cdd=new CustomDialogClass(Values.this);
+                   // cdd.show();
                     return false;
                 }
             }

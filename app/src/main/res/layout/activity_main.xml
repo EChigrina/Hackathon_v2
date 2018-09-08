@@ -25,7 +25,9 @@
         class="com.here.android.mpa.mapping.MapFragment"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
-        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:layout_marginTop="60dp"
+        app:layout_constraintBottom_toBottomOf="@+id/btFindCar"
         app:layout_constraintTop_toBottomOf="@+id/etFindPlace" />
 
     <Button
@@ -39,6 +41,33 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
+
+    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/activity_main"
+        android:layout_width="fill_parent"
+        android:layout_height="40dp"
+        android:padding="16dp"
+        app:layout_constraintTop_toBottomOf="@+id/etFindPlace"
+        tools:layout_editor_absoluteX="0dp"
+        tools:layout_editor_absoluteY="16dp">
+
+        <ImageView
+            android:layout_width="15dp"
+            android:layout_height="20dp" />
+
+        <Button
+            android:onClick="onClickOK"
+            android:layout_width="8dp"
+            android:layout_height="12dp"
+            android:text="OK" />
+
+        <Button
+            android:layout_width="8dp"
+            android:layout_height="12dp"
+            android:onClick="onClickCancell"
+            android:text="OK" />
+
+    </RelativeLayout>
 
 
 </android.support.constraint.ConstraintLayout>

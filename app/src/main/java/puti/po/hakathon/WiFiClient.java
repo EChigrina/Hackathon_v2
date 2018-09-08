@@ -55,8 +55,9 @@ public class WiFiClient {
             @Override
             public void call(Object... args) {
                 Intent intent = new Intent("newDriver");
-                intent.putExtra("driverLocation", args[0].toString());
-                intent.putExtra("driverDestination", args[1].toString());
+                intent.putExtra("driverID", args[0].toString());
+                intent.putExtra("driverLocation", args[1].toString());
+                intent.putExtra("driverDestination", args[2].toString());
                 LocalBroadcastManager.getInstance(UIContext).sendBroadcast(intent);
             }
 
@@ -65,8 +66,20 @@ public class WiFiClient {
             @Override
             public void call(Object... args) {
                 Intent intent = new Intent("newPassenger");
-                intent.putExtra("passengerLocation", args[0].toString());
-                intent.putExtra("passengerDestination", args[1].toString());
+                intent.putExtra("passengerID", args[0].toString());
+                intent.putExtra("passengerLocation", args[1].toString());
+                intent.putExtra("passengerDestination", args[2].toString());
+                LocalBroadcastManager.getInstance(UIContext).sendBroadcast(intent);
+            }
+
+        }).on("driverInfo", new Emitter.Listener() {
+
+            @Override
+            public void call(Object... args) {
+                Intent intent = new Intent("driverInfo");
+                intent.putExtra("driverID", args[0].toString());
+                intent.putExtra("driverPhoto", args[1].toString());
+                intent.putExtra("driverAuto", args[2].toString());
                 LocalBroadcastManager.getInstance(UIContext).sendBroadcast(intent);
             }
 
@@ -92,6 +105,10 @@ public class WiFiClient {
 
     public void getDrivers() {
         socket.emit("getDrivers");
+    }
+
+    public void getDriver(String ID) {
+        socket.emit("getDriver", ID);
     }
 
     public void getPassengers() {

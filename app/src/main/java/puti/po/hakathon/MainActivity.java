@@ -8,6 +8,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.gesture.GestureOverlayView;
+import android.graphics.PointF;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.provider.MediaStore;
@@ -25,6 +27,7 @@ import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -33,9 +36,12 @@ import com.here.android.mpa.common.GeoPosition;
 import com.here.android.mpa.common.Image;
 import com.here.android.mpa.common.OnEngineInitListener;
 import com.here.android.mpa.common.PositioningManager;
+import com.here.android.mpa.common.ViewObject;
 import com.here.android.mpa.mapping.Map;
 import com.here.android.mpa.mapping.MapFragment;
+import com.here.android.mpa.mapping.MapGesture;
 import com.here.android.mpa.mapping.MapMarker;
+import com.here.android.mpa.mapping.MapObject;
 import com.here.android.mpa.mapping.MapRoute;
 import com.here.android.mpa.mapping.MapState;
 import com.here.android.mpa.mapping.PositionIndicator;
@@ -57,7 +63,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements PositioningManager.OnPositionChangedListener{
+public class MainActivity extends AppCompatActivity implements MapGesture.OnGestureListener, PositioningManager.OnPositionChangedListener{
 
     final static int REQUEST_CODE_ASK_PERMISSIONS = 1;
 
@@ -71,14 +77,18 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
     PositioningManager mPositioningManager;
 
     EditText etFindPlace;
+    Button btFindCar;
     GeoPosition currentPosition = null;
     MapMarker currentLocationMarker = null;
+    MapMarker destinationMarker = null;
     Context context;
     WiFiClient WiFiClient;
     SharedPreferences sPref;
     BroadcastReceiver newDriverBroadcastReceiver;
     BroadcastReceiver newPassengerBroadcastReceiver;
+    BroadcastReceiver driverInfoBroadcastReceiver;
     BroadcastReceiver connectedBroadcastReceiver;
+    MapRoute mapRoute;
 
 
     @Override
@@ -105,6 +115,13 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
                       return false;
                   }
               });
+        btFindCar = findViewById(R.id.btFindCar);
+        btFindCar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                findCar();
+            }
+        });
         sPref = getPreferences(MODE_PRIVATE);
         if(sPref.contains("IP")) {
             String ip = sPref.getString("IP", "");
@@ -118,11 +135,9 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
                 if (error == OnEngineInitListener.Error.NONE) {
                     // retrieve a reference of the map from the map fragment
                     map = mapFragment.getMap();
-                    // Set the map center coordinate to the Vancouver region (no animation)
-                    map.setCenter(new GeoCoordinate(49.196261, -123.004773, 0.0),
-                            Map.Animation.NONE);
                     // Set the map zoom level to the average between min and max (no animation)
                     map.setZoomLevel((map.getMaxZoomLevel() + map.getMinZoomLevel()) / 2);
+                    mapFragment.getMapGesture().addOnGestureListener(MainActivity.this);
                     mPositioningManager = PositioningManager.getInstance();
                     mPositioningManager.addListener(new WeakReference<PositioningManager.OnPositionChangedListener>(
                             MainActivity.this));
@@ -141,6 +156,9 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
                 }
             }
         });
+    }
+
+    private void findCar() {
     }
 
     @Override
@@ -230,6 +248,11 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
                 newDriverBroadcastReceiver,
                 new IntentFilter("newDriver"));
 
+        driverInfoBroadcastReceiver = createDriverInfoBroadcastReceiver();
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+                driverInfoBroadcastReceiver,
+                new IntentFilter("driverInfo"));
+
         connectedBroadcastReceiver = connectedBroadcastReceiver();
         LocalBroadcastManager.getInstance(this).registerReceiver(
                 connectedBroadcastReceiver,
@@ -240,6 +263,9 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
         return new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
+                if(intent.hasExtra("passengerID")) {
+                    String passengerID = intent.getStringExtra("passengerID");
+                }
                 if(intent.hasExtra("passengerLocation")) {
                     String passengerLocation = intent.getStringExtra("passengerLocation");
                 }
@@ -254,11 +280,31 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
         return new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
+                if(intent.hasExtra("driverID")) {
+                    String driverID = intent.getStringExtra("driverID");
+                }
                 if(intent.hasExtra("driverLocation")) {
                     String driverLocation = intent.getStringExtra("driverLocation");
                 }
                 if(intent.hasExtra("driverDestination")) {
                     String driverDestination = intent.getStringExtra("driverDestination");
+                }
+            }
+        };
+    }
+
+    private BroadcastReceiver createDriverInfoBroadcastReceiver() {
+        return new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if(intent.hasExtra("driverID")) {
+                    String driverID = intent.getStringExtra("driverID");
+                }
+                if(intent.hasExtra("driverPhoto")) {
+                    String driverPhoto = intent.getStringExtra("driverPhoto");
+                }
+                if(intent.hasExtra("driverAuto")) {
+                    String driverAuto = intent.getStringExtra("driverAuto");
                 }
             }
         };
@@ -297,7 +343,22 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
                         sb.append(result.getLocation().getCoordinate().toString());
                         sb.append("\n");
                     }*/
+                    if(results.isEmpty()){
+                        Toast.makeText(MainActivity.this, "Адрес не найден", Toast.LENGTH_LONG).show();
+                        return;
+                    }
                     GeocodeResult result = results.get(0);
+                    Image marker_img = new Image();
+                    try {
+                        marker_img.setImageResource(R.drawable.marker);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    clearRoute();
+                    destinationMarker = new MapMarker(result.getLocation().getCoordinate(), marker_img);
+                    // add a MapMarker to current active map.
+                    map.addMapObject(destinationMarker);
+
                     createRoute(result.getLocation().getCoordinate());
                     // Toast.makeText(context, sb.toString(), Toast.LENGTH_SHORT).show();
                 } else {
@@ -330,6 +391,17 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
         rm.calculateRoute(routePlan, new RouteListener());
     }
 
+    private void clearRoute() {
+        if(destinationMarker != null) {
+            map.removeMapObject(destinationMarker);
+            destinationMarker = null;
+        }
+        if(mapRoute != null) {
+            map.removeMapObject(mapRoute);
+            mapRoute = null;
+        }
+    }
+
     private class RouteListener implements RouteManager.Listener {
 
         // Method defined in Listener
@@ -343,7 +415,7 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
             // If the route was calculated successfully
             if (error == RouteManager.Error.NONE) {
                 // Render the route on the map
-                MapRoute mapRoute = new MapRoute(routeResult.get(0).getRoute());
+                mapRoute = new MapRoute(routeResult.get(0).getRoute());
                 map.addMapObject(mapRoute);
             }
             else {
@@ -461,12 +533,100 @@ public class MainActivity extends AppCompatActivity implements PositioningManage
         }
         // create a MapMarker centered at current location with png image.
         currentLocationMarker = new MapMarker(currentPosition.getCoordinate(), marker_img);
+        currentLocationMarker.setTitle("title1");
         // add a MapMarker to current active map.
         map.addMapObject(currentLocationMarker);
     }
 
     @Override
+    public void onPanStart() {
+
+    }
+
+    @Override
+    public void onPanEnd() {
+
+    }
+
+    @Override
+    public void onMultiFingerManipulationStart() {
+
+    }
+
+    @Override
+    public void onMultiFingerManipulationEnd() {
+
+    }
+
+    @Override
+    public boolean onMapObjectsSelected(List<ViewObject> list) {
+        for (ViewObject viewObject : list) {
+            if (viewObject.getBaseType() == ViewObject.Type.USER_OBJECT) {
+                MapObject mapObject = (MapObject) viewObject;
+
+                if (mapObject.getType() == MapObject.Type.MARKER) {
+
+                    MapMarker window_marker = ((MapMarker) mapObject);
+                    Toast.makeText(context, window_marker.getTitle(), Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onTapEvent(PointF pointF) {
+
+        return false;
+    }
+
+    @Override
+    public boolean onDoubleTapEvent(PointF pointF) {
+        return false;
+    }
+
+    @Override
+    public void onPinchLocked() {
+
+    }
+
+    @Override
+    public boolean onPinchZoomEvent(float v, PointF pointF) {
+        return false;
+    }
+
+    @Override
+    public void onRotateLocked() {
+
+    }
+
+    @Override
+    public boolean onRotateEvent(float v) {
+        return false;
+    }
+
+    @Override
+    public boolean onTiltEvent(float v) {
+        return false;
+    }
+
+    @Override
+    public boolean onLongPressEvent(PointF pointF) {
+        return false;
+    }
+
+    @Override
+    public void onLongPressRelease() {
+
+    }
+
+    @Override
+    public boolean onTwoFingerTapEvent(PointF pointF) {
+        return false;
+    }
+
+    @Override
     public void onPositionFixChanged(PositioningManager.LocationMethod locationMethod, PositioningManager.LocationStatus locationStatus) {
-        Toast.makeText(context, "onPositionUpdated", Toast.LENGTH_SHORT).show();
     }
 }
